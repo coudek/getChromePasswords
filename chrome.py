@@ -75,26 +75,33 @@ class ChromeLinux:
     """ Decryption class for chrome linux installation """
     def __init__(self):
         """ Linux Initialization Function """
+        ## Default password when gnome-keyring is not used
         my_pass = 'peanuts'.encode('utf8')
         bus = secretstorage.dbus_init()
         collection = secretstorage.get_default_collection(bus)
         for item in collection.get_all_items():
             if item.get_label() == 'Chrome Safe Storage':
                 my_pass = item.get_secret()
+                print(f"Retrieved master password from gnome-keyring = {my_pass}")
                 break
         iterations = 1
         salt = b'saltysalt'
         length = 16
 
         kdf = import_module('Cryptodome.Protocol.KDF')
+        ## Compute key for decryption(encryption) derived from password
+        ## 
         self.key = kdf.PBKDF2(my_pass, salt, length, iterations)
+        print(f"Key for password decryption(derived from master password)(hex) = {self.key}")
         self.dbpath = f"/home/{getuser()}/.config/google-chrome/Default/"
 
     def decrypt_func(self, enc_passwd):
         """ Linux Decryption Function """
         aes = import_module('Cryptodome.Cipher.AES')
         initialization_vector = b' ' * 16
+        ## Strip first 3 chars from encrypted password, they are v10/v11 
         enc_passwd = enc_passwd[3:]
+        ## Init cipher
         cipher = aes.new(self.key, aes.MODE_CBC, IV=initialization_vector)
         decrypted = cipher.decrypt(enc_passwd)
         return decrypted.strip().decode('utf8')
@@ -126,7 +133,7 @@ class Chrome:
         conn = sqlite3.connect("Login Data.db")
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT action_url, username_value, password_value
+            SELECT origin_url, username_value, password_value
             FROM logins; """)
         data = {'data': []}
         for result in cursor.fetchall():
@@ -150,7 +157,8 @@ def main():
     """ Operational Script """
     chrome_pwd = Chrome()
     print(chrome_pwd.get_login_db)
-    chrome_pwd.get_password(prettyprint=True)
+    credentials = chrome_pwd.get_password()
+    print(credentials)
 
 
 if __name__ == '__main__':
